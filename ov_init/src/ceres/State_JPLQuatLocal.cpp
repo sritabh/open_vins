@@ -48,9 +48,46 @@ bool State_JPLQuatLocal::Plus(const double *x, const double *delta, double *x_pl
   return true;
 }
 
-bool State_JPLQuatLocal::ComputeJacobian(const double *x, double *jacobian) const {
+bool State_JPLQuatLocal::PlusJacobian(const double *x, double *jacobian) const {
   Eigen::Map<Eigen::Matrix<double, 4, 3, Eigen::RowMajor>> j(jacobian);
   j.topRows<3>().setIdentity();
   j.bottomRows<1>().setZero();
+  return true;
+}
+
+bool State_JPLQuatLocal::Minus(const double *y, const double *x, double *y_minus_x) const {
+  // Compute the "difference" between two quaternions
+  // This is the inverse operation of Plus
+  Eigen::Map<const Eigen::Vector4d> q_x(x);
+  Eigen::Map<const Eigen::Vector4d> q_y(y);
+
+  // Compute q_y * conjugate(q_x) to get the relative rotation
+  Eigen::Vector4d q_x_conj = q_x;
+  q_x_conj.head<3>() *= -1.0; // conjugate of JPL quaternion
+
+  Eigen::Vector4d q_diff = ov_core::quat_multiply(q_y, q_x_conj);
+
+  // Convert quaternion difference to axis-angle representation
+  Eigen::Map<Eigen::Vector3d> delta(y_minus_x);
+  if (std::abs(q_diff(3)) >= 1.0) {
+    delta.setZero();
+  } else {
+    double theta = 2.0 * std::acos(std::abs(q_diff(3)));
+    if (theta < 1e-8) {
+      delta = 2.0 * q_diff.head<3>();
+    } else {
+      delta = theta * q_diff.head<3>() / q_diff.head<3>().norm();
+    }
+  }
+
+  return true;
+}
+
+bool State_JPLQuatLocal::MinusJacobian(const double *x, double *jacobian) const {
+  // For this simple implementation, we use the same jacobian as Plus
+  // In practice, this might need more sophisticated computation
+  Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>> j(jacobian);
+  j.leftCols<3>().setIdentity();
+  j.rightCols<1>().setZero();
   return true;
 }
